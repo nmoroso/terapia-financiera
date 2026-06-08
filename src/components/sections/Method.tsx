@@ -13,14 +13,18 @@ const iconMap: Record<string, React.ElementType> = {
 
 export function Method() {
   return (
-    <section id="metodo" className="bg-white py-16 md:py-24">
-      <div className="mx-auto max-w-6xl px-4 md:px-6">
+    <section
+      id="metodo"
+      className="bg-white"
+      style={{ paddingTop: "var(--section-gap)", paddingBottom: "var(--section-gap)" }}
+    >
+      <div className="mx-auto max-w-[1200px] px-6">
         <SectionHeader
           label="El método"
           title="Un proceso guiado, no una lista genérica"
           subtitle="Terapia Financiera sigue un proceso estructurado de 5 pasos que convierte confusión en claridad y claridad en acción."
         />
-        <div className="relative flex flex-col gap-0">
+        <div className="max-w-2xl">
           {methodSteps.map((step, i) => {
             const Icon = iconMap[step.icon];
             const isLast = i === methodSteps.length - 1;
@@ -34,19 +38,25 @@ export function Method() {
                 className="flex gap-5"
               >
                 <div className="flex flex-col items-center">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-indigo-600 shadow-sm">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm"
+                    style={{ background: "linear-gradient(135deg, var(--c-primary), var(--c-accent))" }}
+                  >
                     {Icon && <Icon size={16} className="text-white" />}
                   </div>
-                  {!isLast && <div className="mt-1 w-px flex-1 bg-slate-200 min-h-[40px]" />}
+                  {!isLast && (
+                    <div
+                      className="mt-1 w-px flex-1 min-h-[40px]"
+                      style={{ background: "var(--c-border)" }}
+                    />
+                  )}
                 </div>
                 <div className="pb-10">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                      Paso {step.step}
-                    </span>
-                  </div>
+                  <span className="section-label" style={{ marginBottom: "4px" }}>Paso {step.step}</span>
                   <h3 className="text-base font-bold text-slate-900 mb-1">{step.title}</h3>
-                  <p className="text-sm leading-relaxed text-slate-600">{step.description}</p>
+                  <p className="text-sm text-slate-600" style={{ lineHeight: 1.65 }}>
+                    {step.description}
+                  </p>
                 </div>
               </motion.div>
             );

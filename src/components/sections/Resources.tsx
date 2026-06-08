@@ -29,8 +29,12 @@ const statusConfig: Record<ResourceStatus, { label: string; variant: "active" | 
 
 export function Resources() {
   return (
-    <section id="recursos" className="bg-white py-16 md:py-24">
-      <div className="mx-auto max-w-6xl px-4 md:px-6">
+    <section
+      id="recursos"
+      className="bg-white"
+      style={{ paddingTop: "var(--section-gap)", paddingBottom: "var(--section-gap)" }}
+    >
+      <div className="mx-auto max-w-[1200px] px-6">
         <SectionHeader
           label="Recursos"
           title="Herramientas y contenido gratuito"
@@ -48,25 +52,32 @@ export function Resources() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.06 }}
-                className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3 ${
-                  isComingSoon ? "opacity-60" : ""
+                className={`card p-5 flex flex-col gap-3 ${
+                  isComingSoon ? "opacity-55" : ""
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50">
-                    {Icon && <Icon size={17} className="text-indigo-600" />}
+                  <span
+                    className="flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{ background: "var(--c-primary-light)" }}
+                  >
+                    {Icon && <Icon size={17} style={{ color: "var(--c-primary)" }} />}
                   </span>
                   <Badge variant={status.variant}>{status.label}</Badge>
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 mb-1">{resource.title}</h3>
-                  <p className="text-sm leading-relaxed text-slate-600">{resource.description}</p>
+                  <p className="text-sm text-slate-600" style={{ lineHeight: 1.65 }}>
+                    {resource.description}
+                  </p>
                 </div>
                 {!isComingSoon && (
                   <a
                     href={resource.href}
-                    className="mt-auto flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700 transition"
-                  >
+                    className="mt-auto flex items-center gap-1 text-xs font-semibold transition"
+                    style={{ color: "var(--c-primary)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--c-primary-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--c-primary)")}>
                     Acceder <ArrowRight size={12} />
                   </a>
                 )}

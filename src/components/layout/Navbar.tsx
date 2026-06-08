@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Menu, X, TrendingUp } from "lucide-react";
-import { Button } from "../ui/Button";
 
 const navLinks = [
   { label: "Inicio", href: "#inicio" },
@@ -24,25 +23,32 @@ export function Navbar() {
   return (
     <header
       className={`sticky top-0 z-50 w-full transition-all duration-200 ${
-        scrolled ? "bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm" : "bg-white"
+        scrolled
+          ? "bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm"
+          : "bg-white border-b border-transparent"
       }`}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6">
-        <a href="#inicio" className="flex items-center gap-2 group">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-indigo-600">
-            <TrendingUp size={16} className="text-white" />
+      <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
+        {/* Logo */}
+        <a href="#inicio" className="flex items-center gap-2.5 group shrink-0">
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-xl"
+            style={{ background: "linear-gradient(135deg, var(--c-primary), var(--c-accent))" }}
+          >
+            <TrendingUp size={15} className="text-white" />
           </span>
           <span className="text-sm font-black tracking-tight text-slate-900">
             Terapia Financiera
           </span>
         </a>
 
-        <ul className="hidden md:flex items-center gap-6">
+        {/* Desktop links */}
+        <ul className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
             <li key={link.href}>
               <a
                 href={link.href}
-                className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
               >
                 {link.label}
               </a>
@@ -50,14 +56,16 @@ export function Navbar() {
           ))}
         </ul>
 
+        {/* Desktop CTA */}
         <div className="hidden md:block">
-          <Button variant="primary" onClick={() => window.open("#contacto")}>
+          <a href="#contacto" className="btn-primary" style={{ padding: "10px 20px", fontSize: "0.8125rem" }}>
             Agenda tu diagnóstico
-          </Button>
+          </a>
         </div>
 
+        {/* Mobile toggle */}
         <button
-          className="flex md:hidden items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-50 transition"
+          className="flex md:hidden items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-50 transition"
           onClick={() => setOpen(!open)}
           aria-label={open ? "Cerrar menú" : "Abrir menú"}
         >
@@ -65,8 +73,9 @@ export function Navbar() {
         </button>
       </nav>
 
+      {/* Mobile menu */}
       {open && (
-        <div className="md:hidden border-t border-slate-100 bg-white px-4 pb-4">
+        <div className="md:hidden border-t border-slate-100 bg-white px-6 pb-5">
           <ul className="flex flex-col gap-1 pt-2">
             {navLinks.map((link) => (
               <li key={link.href}>
@@ -80,10 +89,15 @@ export function Navbar() {
               </li>
             ))}
           </ul>
-          <div className="mt-3">
-            <Button variant="primary" className="w-full" onClick={() => setOpen(false)}>
+          <div className="mt-4">
+            <a
+              href="#contacto"
+              className="btn-primary w-full"
+              style={{ display: "flex", justifyContent: "center" }}
+              onClick={() => setOpen(false)}
+            >
               Agenda tu diagnóstico
-            </Button>
+            </a>
           </div>
         </div>
       )}
