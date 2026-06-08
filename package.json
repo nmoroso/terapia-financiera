@@ -1,5 +1,5 @@
 {
-  "name": "cavmpro-temp",
+  "name": "terapia-financiera",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,6 +12,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.101.0",
+    "firebase": "^11.0.0",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",

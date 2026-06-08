@@ -1,9 +1,8 @@
-name: Deploy to Firebase Hosting
+name: Deploy to Firebase
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   deploy:
@@ -16,16 +15,38 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm install
 
-      - name: Build
+      - name: Build frontend
         run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
-      - name: Deploy to Firebase Hosting
+      - name: Install functions dependencies
+        run: npm install
+        working-directory: functions
+
+      - name: Build functions
+        run: npm run build
+        working-directory: functions
+
+      - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
           projectId: terapia-financiera-b04c6
+          target: hosting
+
+      - name: Deploy Functions
+        run: npx firebase-tools deploy --only functions --project terapia-financiera-b04c6
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        working-directory: functions
