@@ -24,16 +24,16 @@ export function Navbar() {
     <header
       className={`sticky top-0 z-50 w-full transition-all duration-200 ${
         scrolled
-          ? "bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm"
-          : "bg-white border-b border-transparent"
+          ? "bg-white/95 backdrop-blur-sm border-b border-slate-100 shadow-sm"
+          : "bg-white"
       }`}
     >
-      <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
         {/* Logo */}
-        <a href="#inicio" className="flex items-center gap-2.5 group shrink-0">
+        <a href="#inicio" className="flex items-center gap-2.5 shrink-0">
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-xl"
-            style={{ background: "linear-gradient(135deg, var(--c-primary), var(--c-accent))" }}
+            className="flex h-8 w-8 items-center justify-center rounded-xl shrink-0"
+            style={{ background: "linear-gradient(135deg, #0066FF, #00C9A7)" }}
           >
             <TrendingUp size={15} className="text-white" />
           </span>
@@ -48,7 +48,7 @@ export function Navbar() {
             <li key={link.href}>
               <a
                 href={link.href}
-                className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+                className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors"
               >
                 {link.label}
               </a>
@@ -57,15 +57,16 @@ export function Navbar() {
         </ul>
 
         {/* Desktop CTA */}
-        <div className="hidden md:block">
-          <a href="#contacto" className="btn-primary" style={{ padding: "10px 20px", fontSize: "0.8125rem" }}>
-            Agenda tu diagnóstico
-          </a>
-        </div>
+        <a
+          href="#contacto"
+          className="hidden md:inline-flex items-center gap-2 rounded-full bg-[#0066FF] hover:bg-[#0052CC] px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+        >
+          Agenda tu diagnóstico
+        </a>
 
         {/* Mobile toggle */}
         <button
-          className="flex md:hidden items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-50 transition"
+          className="flex md:hidden items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
           onClick={() => setOpen(!open)}
           aria-label={open ? "Cerrar menú" : "Abrir menú"}
         >
@@ -75,13 +76,13 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden border-t border-slate-100 bg-white px-6 pb-5">
-          <ul className="flex flex-col gap-1 pt-2">
+        <div className="md:hidden border-t border-slate-100 bg-white px-6 pb-6">
+          <ul className="flex flex-col pt-3 pb-4">
             {navLinks.map((link) => (
               <li key={link.href}>
                 <a
                   href={link.href}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                   onClick={() => setOpen(false)}
                 >
                   {link.label}
@@ -89,16 +90,13 @@ export function Navbar() {
               </li>
             ))}
           </ul>
-          <div className="mt-4">
-            <a
-              href="#contacto"
-              className="btn-primary w-full"
-              style={{ display: "flex", justifyContent: "center" }}
-              onClick={() => setOpen(false)}
-            >
-              Agenda tu diagnóstico
-            </a>
-          </div>
+          <a
+            href="#contacto"
+            className="flex w-full items-center justify-center rounded-full bg-[#0066FF] hover:bg-[#0052CC] py-3 text-sm font-semibold text-white transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Agenda tu diagnóstico
+          </a>
         </div>
       )}
     </header>

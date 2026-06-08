@@ -6,17 +6,17 @@ interface SectionHeaderProps {
 }
 
 export function SectionHeader({ label, title, subtitle, align = "center" }: SectionHeaderProps) {
-  const textAlign = align === "center" ? "text-center" : "text-left";
-  const mx = align === "center" ? "mx-auto" : "";
-
+  const center = align === "center";
   return (
-    <div className={`mb-12 max-w-2xl ${mx} ${textAlign}`}>
-      <span className="section-label">{label}</span>
-      <h2 className="text-2xl font-black tracking-tight text-slate-900 md:text-4xl leading-tight mb-4">
+    <div className={`mb-16 max-w-2xl ${center ? "mx-auto text-center" : ""}`}>
+      <span className="inline-block text-[11px] font-bold tracking-[0.14em] uppercase text-[#0066FF] mb-3">
+        {label}
+      </span>
+      <h2 className="text-3xl font-black tracking-tight text-slate-900 md:text-[2.6rem] leading-[1.15] mb-5">
         {title}
       </h2>
       {subtitle && (
-        <p className="text-sm text-slate-600 md:text-base" style={{ lineHeight: 1.7 }}>
+        <p className="text-base text-slate-500 leading-relaxed">
           {subtitle}
         </p>
       )}
