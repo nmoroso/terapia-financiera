@@ -38,7 +38,21 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Utility classes using CSS vars */
+/* Hero 60/40 grid */
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+  align-items: center;
+}
+@media (min-width: 768px) {
+  .hero-grid {
+    grid-template-columns: 3fr 2fr;
+    gap: 64px;
+  }
+}
+
+/* Shared utility classes */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -56,16 +70,9 @@ html {
   text-decoration: none;
   white-space: nowrap;
 }
-.btn-primary:hover {
-  background-color: var(--c-primary-hover);
-}
-.btn-primary:active {
-  transform: scale(0.98);
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn-primary:hover { background-color: var(--c-primary-hover); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-secondary {
   display: inline-flex;
@@ -88,10 +95,7 @@ html {
   border-color: #cbd5e1;
   color: var(--c-text);
 }
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .section-label {
   display: inline-block;
