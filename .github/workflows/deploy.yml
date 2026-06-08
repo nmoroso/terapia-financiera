@@ -36,17 +36,18 @@ jobs:
         run: npm run build
         working-directory: functions
 
-      - name: Deploy to Firebase
+      - name: Deploy Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
           projectId: terapia-financiera-b04c6
-          target: hosting
+
+      - name: Write service account file
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
 
       - name: Deploy Functions
-        run: npx firebase-tools deploy --only functions --project terapia-financiera-b04c6
+        run: npx firebase-tools@latest deploy --only functions --project terapia-financiera-b04c6 --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        working-directory: functions
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
