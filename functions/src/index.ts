@@ -206,13 +206,15 @@ export const adminGetBookings = functions.region(REGION).https.onRequest((req, r
     if (from) query = query.where("startTime", ">=", admin.firestore.Timestamp.fromDate(new Date(from)));
     if (to) query = query.where("startTime", "<=", admin.firestore.Timestamp.fromDate(new Date(to)));
     const snap = await query.limit(200).get();
-    let bookings = snap.docs.map((d) => ({
-      id: d.id, ...d.data(),
-      startTime: (d.data().startTime as admin.firestore.Timestamp).toDate().toISOString(),
-      endTime: (d.data().endTime as admin.firestore.Timestamp).toDate().toISOString(),
-      createdAt: (d.data().createdAt as admin.firestore.Timestamp)?.toDate().toISOString(),
-    }));
-    if (status) bookings = bookings.filter((b) => (b as { status: string }).status === status);
+    const bookings = snap.docs
+      .map((d) => ({
+        id: d.id,
+        ...(d.data() as Booking),
+        startTime: (d.data().startTime as admin.firestore.Timestamp).toDate().toISOString(),
+        endTime: (d.data().endTime as admin.firestore.Timestamp).toDate().toISOString(),
+        createdAt: (d.data().createdAt as admin.firestore.Timestamp)?.toDate().toISOString(),
+      }))
+      .filter((b) => !status || b.status === status);
     return { bookings };
   })
 );
@@ -267,8 +269,8 @@ export const adminGetSessionTypes = functions.region(REGION).https.onRequest((re
   handle(req, res, true, async () => {
     const snap = await db.collection("sessionTypes").get();
     const sessionTypes = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (a as { name: string }).name.localeCompare((b as { name: string }).name));
+      .map((d) => ({ id: d.id, ...(d.data() as SessionType) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
     return { sessionTypes };
   })
 );
