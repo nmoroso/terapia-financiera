@@ -29,7 +29,6 @@ export function Navbar() {
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
-        {/* Logo */}
         <a href="#inicio" className="flex items-center gap-2.5 shrink-0">
           <span
             className="flex h-8 w-8 items-center justify-center rounded-xl shrink-0"
@@ -42,7 +41,6 @@ export function Navbar() {
           </span>
         </a>
 
-        {/* Desktop links */}
         <ul className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
             <li key={link.href}>
@@ -56,15 +54,13 @@ export function Navbar() {
           ))}
         </ul>
 
-        {/* Desktop CTA */}
         <a
-          href="#contacto"
+          href="/agenda"
           className="hidden md:inline-flex items-center gap-2 rounded-full bg-[#0066FF] hover:bg-[#0052CC] px-5 py-2.5 text-sm font-semibold text-white transition-colors"
         >
           Agenda tu diagnóstico
         </a>
 
-        {/* Mobile toggle */}
         <button
           className="flex md:hidden items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
           onClick={() => setOpen(!open)}
@@ -74,7 +70,6 @@ export function Navbar() {
         </button>
       </nav>
 
-      {/* Mobile menu */}
       {open && (
         <div className="md:hidden border-t border-slate-100 bg-white px-6 pb-6">
           <ul className="flex flex-col pt-3 pb-4">
@@ -91,7 +86,7 @@ export function Navbar() {
             ))}
           </ul>
           <a
-            href="#contacto"
+            href="/agenda"
             className="flex w-full items-center justify-center rounded-full bg-[#0066FF] hover:bg-[#0052CC] py-3 text-sm font-semibold text-white transition-colors"
             onClick={() => setOpen(false)}
           >

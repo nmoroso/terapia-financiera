@@ -12,10 +12,8 @@ export function Hero() {
   return (
     <section id="inicio" className="bg-white py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-6">
-        {/* 60/40 grid: single column on mobile, two columns on md+ */}
         <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-12 md:gap-16 items-center">
 
-          {/* Left 60%: headline + CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -34,7 +32,7 @@ export function Hero() {
             </p>
             <div className="flex flex-wrap gap-3">
               <a
-                href="#contacto"
+                href="/agenda"
                 className="inline-flex items-center gap-2 rounded-full bg-[#0066FF] hover:bg-[#0052CC] px-7 py-3.5 text-sm font-semibold text-white transition-colors shadow-sm"
               >
                 Agenda tu diagnóstico
@@ -49,7 +47,6 @@ export function Hero() {
             </div>
           </motion.div>
 
-          {/* Right 40%: benefits card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

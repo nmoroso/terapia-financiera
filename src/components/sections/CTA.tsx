@@ -25,7 +25,6 @@ export function CTA() {
             quieres lograr y qué camino tiene más sentido para ti.
           </p>
 
-          {/* Badge */}
           <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-5 py-2.5 mb-10">
             <span className="text-sm font-semibold text-white">
               ✨ Primera sesión de diagnóstico sin compromiso
@@ -34,7 +33,7 @@ export function CTA() {
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a
-              href="#contacto"
+              href="/agenda"
               className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 text-sm font-bold text-[#0066FF] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
             >
               Agenda tu diagnóstico
