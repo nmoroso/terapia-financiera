@@ -51,6 +51,7 @@ function handle(
       const result = await handler(req.body, uid);
       res.json(result);
     } catch (err: unknown) {
+      console.error("Handler error:", err);
       const msg = err instanceof Error ? err.message : "Internal error";
       res.status(400).json({ error: msg });
     }
