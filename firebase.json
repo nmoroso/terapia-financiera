@@ -3,7 +3,20 @@
     "site": "terapia-financiera-b04c6",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{"source": "**", "destination": "/index.html"}],
+    "rewrites": [
+      { "source": "/api/getSessionTypes", "function": "getSessionTypes", "region": "southamerica-east1" },
+      { "source": "/api/getAvailableSlots", "function": "getAvailableSlots", "region": "southamerica-east1" },
+      { "source": "/api/createBooking", "function": "createBooking", "region": "southamerica-east1" },
+      { "source": "/api/adminGetBookings", "function": "adminGetBookings", "region": "southamerica-east1" },
+      { "source": "/api/adminCancelBooking", "function": "adminCancelBooking", "region": "southamerica-east1" },
+      { "source": "/api/adminGetAvailability", "function": "adminGetAvailability", "region": "southamerica-east1" },
+      { "source": "/api/adminUpdateAvailability", "function": "adminUpdateAvailability", "region": "southamerica-east1" },
+      { "source": "/api/adminGetSessionTypes", "function": "adminGetSessionTypes", "region": "southamerica-east1" },
+      { "source": "/api/adminCreateSessionType", "function": "adminCreateSessionType", "region": "southamerica-east1" },
+      { "source": "/api/adminUpdateSessionType", "function": "adminUpdateSessionType", "region": "southamerica-east1" },
+      { "source": "/api/adminDeleteSessionType", "function": "adminDeleteSessionType", "region": "southamerica-east1" },
+      { "source": "**", "destination": "/index.html" }
+    ],
     "headers": [{"source": "/assets/**", "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}]}]
   },
   "functions": [

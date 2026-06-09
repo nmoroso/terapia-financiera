@@ -1,16 +1,40 @@
-import { httpsCallable } from "firebase/functions";
-import { functions } from "../firebase";
+import { getAuth } from "firebase/auth";
+import { app } from "../firebase";
 import type { SessionType, Booking, DayAvailability } from "../types/booking";
+
+async function call<T>(name: string, data?: unknown): Promise<{ data: T }> {
+  const res = await fetch(`/api/${name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data ?? {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Request failed");
+  return { data: json as T };
+}
+
+async function callAdmin<T>(name: string, data?: unknown): Promise<{ data: T }> {
+  const auth = getAuth(app);
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch(`/api/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data ?? {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Request failed");
+  return { data: json as T };
+}
 
 export const api = {
   getSessionTypes: () =>
-    httpsCallable<void, { sessionTypes: SessionType[] }>(functions, "getSessionTypes")(),
+    call<{ sessionTypes: SessionType[] }>("getSessionTypes"),
 
   getAvailableSlots: (date: string, sessionTypeId: string) =>
-    httpsCallable<unknown, { slots: string[] }>(functions, "getAvailableSlots")({
-      date,
-      sessionTypeId,
-    }),
+    call<{ slots: string[] }>("getAvailableSlots", { date, sessionTypeId }),
 
   createBooking: (data: {
     sessionTypeId: string;
@@ -18,35 +42,29 @@ export const api = {
     clientEmail: string;
     startTime: string;
     notes?: string;
-  }) => httpsCallable<unknown, { bookingId: string }>(functions, "createBooking")(data),
+  }) => call<{ bookingId: string }>("createBooking", data),
 
-  // Admin
   adminGetBookings: (filters?: { status?: string; from?: string; to?: string }) =>
-    httpsCallable<unknown, { bookings: Booking[] }>(functions, "adminGetBookings")(filters ?? {}),
+    callAdmin<{ bookings: Booking[] }>("adminGetBookings", filters ?? {}),
 
   adminCancelBooking: (bookingId: string) =>
-    httpsCallable<unknown, { success: boolean }>(functions, "adminCancelBooking")({ bookingId }),
+    callAdmin<{ success: boolean }>("adminCancelBooking", { bookingId }),
 
   adminGetAvailability: () =>
-    httpsCallable<void, { availability: Record<string, DayAvailability> }>(
-      functions,
-      "adminGetAvailability"
-    )(),
+    callAdmin<{ availability: Record<string, DayAvailability> }>("adminGetAvailability"),
 
   adminUpdateAvailability: (availability: Record<string, DayAvailability>) =>
-    httpsCallable<unknown, { success: boolean }>(functions, "adminUpdateAvailability")({
-      availability,
-    }),
+    callAdmin<{ success: boolean }>("adminUpdateAvailability", { availability }),
 
   adminGetSessionTypes: () =>
-    httpsCallable<void, { sessionTypes: SessionType[] }>(functions, "adminGetSessionTypes")(),
+    callAdmin<{ sessionTypes: SessionType[] }>("adminGetSessionTypes"),
 
   adminCreateSessionType: (data: Omit<SessionType, "id">) =>
-    httpsCallable<unknown, { id: string }>(functions, "adminCreateSessionType")(data),
+    callAdmin<{ id: string }>("adminCreateSessionType", data),
 
   adminUpdateSessionType: (data: SessionType) =>
-    httpsCallable<unknown, { success: boolean }>(functions, "adminUpdateSessionType")(data),
+    callAdmin<{ success: boolean }>("adminUpdateSessionType", data),
 
   adminDeleteSessionType: (id: string) =>
-    httpsCallable<unknown, { success: boolean }>(functions, "adminDeleteSessionType")({ id }),
+    callAdmin<{ success: boolean }>("adminDeleteSessionType", { id }),
 };

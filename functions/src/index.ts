@@ -5,7 +5,6 @@ import sgMail from "@sendgrid/mail";
 
 admin.initializeApp();
 const db = admin.firestore();
-
 const REGION = "southamerica-east1";
 
 interface TimeSlot { start: string; end: string; }
@@ -20,6 +19,42 @@ interface Booking {
   startTime: admin.firestore.Timestamp; endTime: admin.firestore.Timestamp;
   status: "confirmed" | "cancelled"; googleEventId?: string;
   createdAt: admin.firestore.Timestamp;
+}
+
+function setCors(res: functions.Response) {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
+async function getUid(req: functions.https.Request): Promise<string | undefined> {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return undefined;
+  try {
+    const decoded = await admin.auth().verifyIdToken(header.split("Bearer ")[1]);
+    return decoded.uid;
+  } catch { return undefined; }
+}
+
+function handle(
+  req: functions.https.Request,
+  res: functions.Response,
+  requireAuth: boolean,
+  handler: (data: unknown, uid?: string) => Promise<unknown>
+) {
+  setCors(res);
+  if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+  if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
+  getUid(req).then(async (uid) => {
+    if (requireAuth && !uid) { res.status(401).json({ error: "Unauthenticated" }); return; }
+    try {
+      const result = await handler(req.body, uid);
+      res.json(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Internal error";
+      res.status(400).json({ error: msg });
+    }
+  });
 }
 
 function getCalendarClient(credentials: object) {
@@ -57,31 +92,27 @@ function generateSlots(
     while (current.getTime() + durationMinutes * 60000 <= windowEnd.getTime()) {
       const slotEnd = new Date(current.getTime() + durationMinutes * 60000);
       const overlaps = existingBookings.some((b) => current < b.end && slotEnd > b.start);
-      const isPast = current <= new Date();
-      if (!overlaps && !isPast) slots.push(current.toISOString());
+      if (!overlaps && current > new Date()) slots.push(current.toISOString());
       current = new Date(current.getTime() + durationMinutes * 60000);
     }
   }
   return slots;
 }
 
-export const getSessionTypes = functions
-  .region(REGION)
-  .https.onCall(async () => {
+export const getSessionTypes = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, false, async () => {
     const snap = await db.collection("sessionTypes")
       .where("active", "==", true).orderBy("name").get();
     return { sessionTypes: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
-  });
+  })
+);
 
-export const getAvailableSlots = functions
-  .region(REGION)
-  .https.onCall(async (data: { date: string; sessionTypeId: string }) => {
-    const { date, sessionTypeId } = data;
-    if (!date || !sessionTypeId)
-      throw new functions.https.HttpsError("invalid-argument", "date and sessionTypeId required");
+export const getAvailableSlots = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, false, async (data) => {
+    const { date, sessionTypeId } = data as { date: string; sessionTypeId: string };
+    if (!date || !sessionTypeId) throw new Error("date and sessionTypeId required");
     const sessionTypeDoc = await db.collection("sessionTypes").doc(sessionTypeId).get();
-    if (!sessionTypeDoc.exists)
-      throw new functions.https.HttpsError("not-found", "Session type not found");
+    if (!sessionTypeDoc.exists) throw new Error("Session type not found");
     const sessionType = sessionTypeDoc.data() as SessionType;
     const targetDate = new Date(date + "T12:00:00");
     const dayOfWeek = targetDate.getDay().toString();
@@ -92,86 +123,82 @@ export const getAvailableSlots = functions
     if (!dayAvailability?.enabled) return { slots: [] };
     const existingBookings = await getExistingBookings(targetDate);
     return { slots: generateSlots(targetDate, dayAvailability, sessionType.duration, existingBookings) };
-  });
+  })
+);
 
-export const createBooking = functions
-  .region(REGION)
+export const createBooking = functions.region(REGION)
   .runWith({ secrets: ["SENDGRID_API_KEY", "GOOGLE_CALENDAR_CREDENTIALS", "GOOGLE_CALENDAR_ID", "OWNER_EMAIL"] })
-  .https.onCall(async (data: {
-    sessionTypeId: string; clientName: string; clientEmail: string;
-    startTime: string; notes?: string;
-  }) => {
-    const { sessionTypeId, clientName, clientEmail, startTime, notes } = data;
-    if (!sessionTypeId || !clientName || !clientEmail || !startTime)
-      throw new functions.https.HttpsError("invalid-argument", "Missing required fields");
-    const sessionTypeDoc = await db.collection("sessionTypes").doc(sessionTypeId).get();
-    if (!sessionTypeDoc.exists)
-      throw new functions.https.HttpsError("not-found", "Session type not found");
-    const sessionType = sessionTypeDoc.data() as SessionType;
-    const start = new Date(startTime);
-    const end = new Date(start.getTime() + sessionType.duration * 60000);
-    const dayBookings = await getExistingBookings(start);
-    if (dayBookings.some((b) => start < b.end && end > b.start))
-      throw new functions.https.HttpsError("already-exists", "Slot no longer available");
+  .https.onRequest((req, res) =>
+    handle(req, res, false, async (data) => {
+      const { sessionTypeId, clientName, clientEmail, startTime, notes } = data as {
+        sessionTypeId: string; clientName: string; clientEmail: string;
+        startTime: string; notes?: string;
+      };
+      if (!sessionTypeId || !clientName || !clientEmail || !startTime)
+        throw new Error("Missing required fields");
+      const sessionTypeDoc = await db.collection("sessionTypes").doc(sessionTypeId).get();
+      if (!sessionTypeDoc.exists) throw new Error("Session type not found");
+      const sessionType = sessionTypeDoc.data() as SessionType;
+      const start = new Date(startTime);
+      const end = new Date(start.getTime() + sessionType.duration * 60000);
+      const dayBookings = await getExistingBookings(start);
+      if (dayBookings.some((b) => start < b.end && end > b.start))
+        throw new Error("Slot no longer available");
 
-    let googleEventId: string | undefined;
-    try {
-      const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
-      const calendar = getCalendarClient(creds);
-      const event = await calendar.events.insert({
-        calendarId: process.env.GOOGLE_CALENDAR_ID!,
-        requestBody: {
-          summary: `${sessionType.name} — ${clientName}`,
-          description: `Cliente: ${clientName}\nEmail: ${clientEmail}${notes ? `\nNotas: ${notes}` : ""}`,
-          start: { dateTime: start.toISOString(), timeZone: "America/Santiago" },
-          end: { dateTime: end.toISOString(), timeZone: "America/Santiago" },
-          attendees: [{ email: clientEmail }],
-          reminders: { useDefault: false, overrides: [{ method: "email", minutes: 1440 }, { method: "popup", minutes: 30 }] },
-        },
+      let googleEventId: string | undefined;
+      try {
+        const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
+        const event = await getCalendarClient(creds).events.insert({
+          calendarId: process.env.GOOGLE_CALENDAR_ID!,
+          requestBody: {
+            summary: `${sessionType.name} — ${clientName}`,
+            description: `Cliente: ${clientName}\nEmail: ${clientEmail}${notes ? `\nNotas: ${notes}` : ""}`,
+            start: { dateTime: start.toISOString(), timeZone: "America/Santiago" },
+            end: { dateTime: end.toISOString(), timeZone: "America/Santiago" },
+            attendees: [{ email: clientEmail }],
+          },
+        });
+        googleEventId = event.data.id ?? undefined;
+      } catch (err) { console.error("Calendar error:", err); }
+
+      const bookingRef = await db.collection("bookings").add({
+        sessionTypeId, sessionTypeName: sessionType.name,
+        sessionTypeDuration: sessionType.duration,
+        clientName, clientEmail, notes: notes ?? "",
+        startTime: admin.firestore.Timestamp.fromDate(start),
+        endTime: admin.firestore.Timestamp.fromDate(end),
+        status: "confirmed", googleEventId: googleEventId ?? null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      googleEventId = event.data.id ?? undefined;
-    } catch (err) { console.error("Google Calendar error:", err); }
 
-    const bookingRef = await db.collection("bookings").add({
-      sessionTypeId, sessionTypeName: sessionType.name,
-      sessionTypeDuration: sessionType.duration,
-      clientName, clientEmail, notes: notes ?? "",
-      startTime: admin.firestore.Timestamp.fromDate(start),
-      endTime: admin.firestore.Timestamp.fromDate(end),
-      status: "confirmed", googleEventId: googleEventId ?? null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      try {
+        sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+        const ownerEmail = process.env.OWNER_EMAIL!;
+        const dateStr = start.toLocaleString("es-CL", {
+          timeZone: "America/Santiago", weekday: "long", year: "numeric",
+          month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+        });
+        await sgMail.send({
+          to: clientEmail,
+          from: { email: ownerEmail, name: "Terapia Financiera" },
+          subject: `Reserva confirmada: ${sessionType.name}`,
+          html: `<h2>¡Tu sesión está confirmada!</h2><p>Hola <strong>${clientName}</strong>,</p><p>Tu sesión de <strong>${sessionType.name}</strong> ha sido agendada para el <strong>${dateStr}</strong>.</p><p>Duración: ${sessionType.duration} minutos.</p>${notes ? `<p>Notas: ${notes}</p>` : ""}<p>Si necesitas cancelar o reagendar, contáctanos.</p><p><strong>Terapia Financiera</strong></p>`,
+        });
+        await sgMail.send({
+          to: ownerEmail,
+          from: { email: ownerEmail, name: "Terapia Financiera" },
+          subject: `Nueva reserva: ${sessionType.name} — ${clientName}`,
+          html: `<h2>Nueva reserva recibida</h2><p><strong>Servicio:</strong> ${sessionType.name}</p><p><strong>Cliente:</strong> ${clientName}</p><p><strong>Email:</strong> ${clientEmail}</p><p><strong>Fecha:</strong> ${dateStr}</p>${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ""}`,
+        });
+      } catch (err) { console.error("SendGrid error:", err); }
 
-    try {
-      sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
-      const ownerEmail = process.env.OWNER_EMAIL!;
-      const dateStr = start.toLocaleString("es-CL", {
-        timeZone: "America/Santiago", weekday: "long", year: "numeric",
-        month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
-      });
-      await sgMail.send({
-        to: clientEmail,
-        from: { email: ownerEmail, name: "Terapia Financiera" },
-        subject: `Reserva confirmada: ${sessionType.name}`,
-        html: `<h2>¡Tu sesión está confirmada!</h2><p>Hola <strong>${clientName}</strong>,</p><p>Tu sesión de <strong>${sessionType.name}</strong> ha sido agendada para el <strong>${dateStr}</strong>.</p><p>Duración: ${sessionType.duration} minutos.</p>${notes ? `<p>Notas: ${notes}</p>` : ""}<p>Si necesitas cancelar o reagendar, contáctanos.</p><p><strong>Terapia Financiera</strong></p>`,
-      });
-      await sgMail.send({
-        to: ownerEmail,
-        from: { email: ownerEmail, name: "Terapia Financiera" },
-        subject: `Nueva reserva: ${sessionType.name} — ${clientName}`,
-        html: `<h2>Nueva reserva recibida</h2><p><strong>Servicio:</strong> ${sessionType.name}</p><p><strong>Cliente:</strong> ${clientName}</p><p><strong>Email:</strong> ${clientEmail}</p><p><strong>Fecha:</strong> ${dateStr}</p>${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ""}`,
-      });
-    } catch (err) { console.error("SendGrid error:", err); }
+      return { bookingId: bookingRef.id };
+    })
+  );
 
-    return { bookingId: bookingRef.id };
-  });
-
-export const adminGetBookings = functions
-  .region(REGION)
-  .https.onCall(async (data: { status?: string; from?: string; to?: string }, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
-    const { status, from, to } = data ?? {};
+export const adminGetBookings = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async (data) => {
+    const { status, from, to } = (data ?? {}) as { status?: string; from?: string; to?: string };
     let query: admin.firestore.Query = db.collection("bookings").orderBy("startTime", "desc");
     if (status) query = query.where("status", "==", status);
     if (from) query = query.where("startTime", ">=", admin.firestore.Timestamp.fromDate(new Date(from)));
@@ -183,108 +210,88 @@ export const adminGetBookings = functions
       endTime: (d.data().endTime as admin.firestore.Timestamp).toDate().toISOString(),
       createdAt: (d.data().createdAt as admin.firestore.Timestamp)?.toDate().toISOString(),
     })) };
-  });
+  })
+);
 
-export const adminCancelBooking = functions
-  .region(REGION)
+export const adminCancelBooking = functions.region(REGION)
   .runWith({ secrets: ["GOOGLE_CALENDAR_CREDENTIALS", "GOOGLE_CALENDAR_ID"] })
-  .https.onCall(async (data: { bookingId: string }, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
-    const { bookingId } = data;
-    if (!bookingId)
-      throw new functions.https.HttpsError("invalid-argument", "bookingId required");
-    const bookingRef = db.collection("bookings").doc(bookingId);
-    const bookingDoc = await bookingRef.get();
-    if (!bookingDoc.exists)
-      throw new functions.https.HttpsError("not-found", "Booking not found");
-    const booking = bookingDoc.data() as Booking;
-    await bookingRef.update({ status: "cancelled" });
-    if (booking.googleEventId) {
-      try {
-        const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
-        await getCalendarClient(creds).events.delete({
-          calendarId: process.env.GOOGLE_CALENDAR_ID!, eventId: booking.googleEventId,
-        });
-      } catch (err) { console.error("Failed to delete calendar event:", err); }
-    }
-    return { success: true };
-  });
+  .https.onRequest((req, res) =>
+    handle(req, res, true, async (data) => {
+      const { bookingId } = data as { bookingId: string };
+      if (!bookingId) throw new Error("bookingId required");
+      const bookingRef = db.collection("bookings").doc(bookingId);
+      const bookingDoc = await bookingRef.get();
+      if (!bookingDoc.exists) throw new Error("Booking not found");
+      const booking = bookingDoc.data() as Booking;
+      await bookingRef.update({ status: "cancelled" });
+      if (booking.googleEventId) {
+        try {
+          const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
+          await getCalendarClient(creds).events.delete({
+            calendarId: process.env.GOOGLE_CALENDAR_ID!, eventId: booking.googleEventId,
+          });
+        } catch (err) { console.error("Calendar delete error:", err); }
+      }
+      return { success: true };
+    })
+  );
 
-export const adminGetAvailability = functions
-  .region(REGION)
-  .https.onCall(async (_data, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
+export const adminGetAvailability = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async () => {
     const doc = await db.collection("config").doc("availability").get();
     if (!doc.exists) {
-      const defaultAvailability: Record<string, DayAvailability> = {};
+      const def: Record<string, DayAvailability> = {};
       for (let i = 0; i <= 6; i++) {
-        defaultAvailability[i.toString()] = {
-          enabled: i >= 1 && i <= 5,
-          slots: i >= 1 && i <= 5 ? [{ start: "09:00", end: "18:00" }] : [],
-        };
+        def[i.toString()] = { enabled: i >= 1 && i <= 5, slots: i >= 1 && i <= 5 ? [{ start: "09:00", end: "18:00" }] : [] };
       }
-      return { availability: defaultAvailability };
+      return { availability: def };
     }
     return { availability: doc.data() };
-  });
+  })
+);
 
-export const adminUpdateAvailability = functions
-  .region(REGION)
-  .https.onCall(async (data: { availability: Record<string, DayAvailability> }, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
-    const { availability } = data;
-    if (!availability)
-      throw new functions.https.HttpsError("invalid-argument", "availability required");
+export const adminUpdateAvailability = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async (data) => {
+    const { availability } = data as { availability: Record<string, DayAvailability> };
+    if (!availability) throw new Error("availability required");
     await db.collection("config").doc("availability").set(availability);
     return { success: true };
-  });
+  })
+);
 
-export const adminGetSessionTypes = functions
-  .region(REGION)
-  .https.onCall(async (_data, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
+export const adminGetSessionTypes = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async () => {
     const snap = await db.collection("sessionTypes").orderBy("name").get();
     return { sessionTypes: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
-  });
+  })
+);
 
-export const adminCreateSessionType = functions
-  .region(REGION)
-  .https.onCall(async (data: Omit<SessionType, "id">, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
-    if (!data.name || !data.duration)
-      throw new functions.https.HttpsError("invalid-argument", "name and duration required");
+export const adminCreateSessionType = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async (data) => {
+    const d = data as Omit<SessionType, "id">;
+    if (!d.name || !d.duration) throw new Error("name and duration required");
     const ref = await db.collection("sessionTypes").add({
-      name: data.name, description: data.description ?? "",
-      duration: data.duration, price: data.price ?? null, active: data.active ?? true,
+      name: d.name, description: d.description ?? "",
+      duration: d.duration, price: d.price ?? null, active: d.active ?? true,
     });
     return { id: ref.id };
-  });
+  })
+);
 
-export const adminUpdateSessionType = functions
-  .region(REGION)
-  .https.onCall(async (data: SessionType, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
-    const { id, ...rest } = data;
-    if (!id)
-      throw new functions.https.HttpsError("invalid-argument", "id required");
+export const adminUpdateSessionType = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async (data) => {
+    const { id, ...rest } = data as SessionType;
+    if (!id) throw new Error("id required");
     await db.collection("sessionTypes").doc(id).update(rest);
     return { success: true };
-  });
+  })
+);
 
-export const adminDeleteSessionType = functions
-  .region(REGION)
-  .https.onCall(async (data: { id: string }, context) => {
-    if (!context.auth)
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated");
-    const { id } = data;
-    if (!id)
-      throw new functions.https.HttpsError("invalid-argument", "id required");
+export const adminDeleteSessionType = functions.region(REGION).https.onRequest((req, res) =>
+  handle(req, res, true, async (data) => {
+    const { id } = data as { id: string };
+    if (!id) throw new Error("id required");
     await db.collection("sessionTypes").doc(id).delete();
     return { success: true };
-  });
+  })
+);
