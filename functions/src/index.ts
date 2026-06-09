@@ -101,9 +101,12 @@ function generateSlots(
 
 export const getSessionTypes = functions.region(REGION).https.onRequest((req, res) =>
   handle(req, res, false, async () => {
-    const snap = await db.collection("sessionTypes")
-      .where("active", "==", true).orderBy("name").get();
-    return { sessionTypes: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+    const snap = await db.collection("sessionTypes").get();
+    const sessionTypes = snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as SessionType) }))
+      .filter((d) => d.active)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { sessionTypes };
   })
 );
 
@@ -200,16 +203,17 @@ export const adminGetBookings = functions.region(REGION).https.onRequest((req, r
   handle(req, res, true, async (data) => {
     const { status, from, to } = (data ?? {}) as { status?: string; from?: string; to?: string };
     let query: admin.firestore.Query = db.collection("bookings").orderBy("startTime", "desc");
-    if (status) query = query.where("status", "==", status);
     if (from) query = query.where("startTime", ">=", admin.firestore.Timestamp.fromDate(new Date(from)));
     if (to) query = query.where("startTime", "<=", admin.firestore.Timestamp.fromDate(new Date(to)));
     const snap = await query.limit(200).get();
-    return { bookings: snap.docs.map((d) => ({
+    let bookings = snap.docs.map((d) => ({
       id: d.id, ...d.data(),
       startTime: (d.data().startTime as admin.firestore.Timestamp).toDate().toISOString(),
       endTime: (d.data().endTime as admin.firestore.Timestamp).toDate().toISOString(),
       createdAt: (d.data().createdAt as admin.firestore.Timestamp)?.toDate().toISOString(),
-    })) };
+    }));
+    if (status) bookings = bookings.filter((b) => (b as { status: string }).status === status);
+    return { bookings };
   })
 );
 
@@ -261,8 +265,11 @@ export const adminUpdateAvailability = functions.region(REGION).https.onRequest(
 
 export const adminGetSessionTypes = functions.region(REGION).https.onRequest((req, res) =>
   handle(req, res, true, async () => {
-    const snap = await db.collection("sessionTypes").orderBy("name").get();
-    return { sessionTypes: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+    const snap = await db.collection("sessionTypes").get();
+    const sessionTypes = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a as { name: string }).name.localeCompare((b as { name: string }).name));
+    return { sessionTypes };
   })
 );
 
