@@ -2,8 +2,10 @@ import { getAuth } from "firebase/auth";
 import { app } from "../firebase";
 import type { SessionType, Booking, DayAvailability } from "../types/booking";
 
+const BASE = "https://southamerica-east1-terapia-financiera-b04c6.cloudfunctions.net";
+
 async function call<T>(name: string, data?: unknown): Promise<{ data: T }> {
-  const res = await fetch(`/api/${name}`, {
+  const res = await fetch(`${BASE}/${name}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data ?? {}),
@@ -16,7 +18,7 @@ async function call<T>(name: string, data?: unknown): Promise<{ data: T }> {
 async function callAdmin<T>(name: string, data?: unknown): Promise<{ data: T }> {
   const auth = getAuth(app);
   const token = await auth.currentUser?.getIdToken();
-  const res = await fetch(`/api/${name}`, {
+  const res = await fetch(`${BASE}/${name}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
