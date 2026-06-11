@@ -152,6 +152,7 @@ export const createBooking = functions.region(REGION)
       let googleEventId: string | undefined;
       try {
         const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
+        console.log("Calendar: inserting event for", clientName);
         const event = await getCalendarClient(creds).events.insert({
           calendarId: process.env.GOOGLE_CALENDAR_ID!,
           requestBody: {
@@ -163,6 +164,7 @@ export const createBooking = functions.region(REGION)
           },
         });
         googleEventId = event.data.id ?? undefined;
+        console.log("Calendar: event created", googleEventId);
       } catch (err) { console.error("Calendar error:", err); }
 
       const bookingRef = await db.collection("bookings").add({
@@ -221,7 +223,7 @@ export const adminGetBookings = functions.region(REGION).https.onRequest((req, r
 );
 
 export const adminCancelBooking = functions.region(REGION)
-  .runWith({ secrets: ["GOOGLE_CALENDAR_CREDENTIALS", "GOOGLE_CALENDAR_ID"] })
+  .runWith({ secrets: ["GOOGLE_CALENDAR_CREDENTIALS", "GOOGLE_CALENDAR_ID", "SENDGRID_API_KEY", "OWNER_EMAIL"] })
   .https.onRequest((req, res) =>
     handle(req, res, true, async (data) => {
       const { bookingId } = data as { bookingId: string };
@@ -231,6 +233,7 @@ export const adminCancelBooking = functions.region(REGION)
       if (!bookingDoc.exists) throw new Error("Booking not found");
       const booking = bookingDoc.data() as Booking;
       await bookingRef.update({ status: "cancelled" });
+
       if (booking.googleEventId) {
         try {
           const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
@@ -239,6 +242,22 @@ export const adminCancelBooking = functions.region(REGION)
           });
         } catch (err) { console.error("Calendar delete error:", err); }
       }
+
+      try {
+        sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+        const ownerEmail = process.env.OWNER_EMAIL!;
+        const dateStr = booking.startTime.toDate().toLocaleString("es-CL", {
+          timeZone: "America/Santiago", weekday: "long", year: "numeric",
+          month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+        });
+        await sgMail.send({
+          to: booking.clientEmail,
+          from: { email: ownerEmail, name: "Terapia Financiera" },
+          subject: `Sesión cancelada: ${booking.sessionTypeName}`,
+          html: `<h2>Tu sesión ha sido cancelada</h2><p>Hola <strong>${booking.clientName}</strong>,</p><p>Tu sesión de <strong>${booking.sessionTypeName}</strong> del <strong>${dateStr}</strong> ha sido cancelada.</p><p>Si deseas reagendar, puedes hacerlo en nuestra página.</p><p><strong>Terapia Financiera</strong></p>`,
+        });
+      } catch (err) { console.error("SendGrid cancellation email error:", err); }
+
       return { success: true };
     })
   );
