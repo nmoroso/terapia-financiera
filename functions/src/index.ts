@@ -134,7 +134,6 @@ export const getAvailableSlots = functions.region(REGION).https.onRequest((req, 
     const sessionTypeDoc = await db.collection("sessionTypes").doc(sessionTypeId).get();
     if (!sessionTypeDoc.exists) throw new Error("Session type not found");
     const sessionType = sessionTypeDoc.data() as SessionType;
-    // Use noon Santiago time to reliably get the correct day of week
     const targetDate = santiagoToUtc(date, "12:00");
     const dayOfWeek = new Date(targetDate.toLocaleString("en-US", { timeZone: "America/Santiago" })).getDay().toString();
     const configDoc = await db.collection("config").doc("availability").get();
@@ -167,29 +166,19 @@ export const createBooking = functions.region(REGION)
         throw new Error("Slot no longer available");
 
       let googleEventId: string | undefined;
-      let meetLink: string | undefined;
       try {
         const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
-        const requestId = `booking-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const event = await getCalendarClient(creds).events.insert({
           calendarId: process.env.GOOGLE_CALENDAR_ID!,
-          conferenceDataVersion: 1,
           requestBody: {
             summary: `${sessionType.name} — ${clientName}`,
             description: `Cliente: ${clientName}\nEmail: ${clientEmail}${notes ? `\nNotas: ${notes}` : ""}`,
             start: { dateTime: start.toISOString(), timeZone: "America/Santiago" },
             end: { dateTime: end.toISOString(), timeZone: "America/Santiago" },
-            conferenceData: {
-              createRequest: {
-                requestId,
-                conferenceSolutionKey: { type: "hangoutsMeet" },
-              },
-            },
           },
         });
         googleEventId = event.data.id ?? undefined;
-        meetLink = event.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ?? undefined;
-        console.log("Calendar: event created", googleEventId, "meet:", meetLink);
+        console.log("Calendar: event created", googleEventId);
       } catch (err) { console.error("Calendar error:", err); }
 
       const bookingRef = await db.collection("bookings").add({
@@ -199,7 +188,6 @@ export const createBooking = functions.region(REGION)
         startTime: admin.firestore.Timestamp.fromDate(start),
         endTime: admin.firestore.Timestamp.fromDate(end),
         status: "confirmed", googleEventId: googleEventId ?? null,
-        meetLink: meetLink ?? null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -210,20 +198,17 @@ export const createBooking = functions.region(REGION)
           timeZone: "America/Santiago", weekday: "long", year: "numeric",
           month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
         });
-        const meetHtml = meetLink
-          ? `<p><strong>Link de la reunión:</strong> <a href="${meetLink}">${meetLink}</a></p>`
-          : "";
         await sgMail.send({
           to: clientEmail,
           from: { email: ownerEmail, name: "Terapia Financiera" },
           subject: `Reserva confirmada: ${sessionType.name}`,
-          html: `<h2>¡Tu sesión está confirmada!</h2><p>Hola <strong>${clientName}</strong>,</p><p>Tu sesión de <strong>${sessionType.name}</strong> ha sido agendada para el <strong>${dateStr}</strong>.</p><p>Duración: ${sessionType.duration} minutos.</p>${meetHtml}${notes ? `<p>Notas: ${notes}</p>` : ""}<p>Si necesitas cancelar o reagendar, contáctanos.</p><p><strong>Terapia Financiera</strong></p>`,
+          html: `<h2>¡Tu sesión está confirmada!</h2><p>Hola <strong>${clientName}</strong>,</p><p>Tu sesión de <strong>${sessionType.name}</strong> ha sido agendada para el <strong>${dateStr}</strong>.</p><p>Duración: ${sessionType.duration} minutos.</p>${notes ? `<p>Notas: ${notes}</p>` : ""}<p>Si necesitas cancelar o reagendar, contáctanos.</p><p><strong>Terapia Financiera</strong></p>`,
         });
         await sgMail.send({
           to: ownerEmail,
           from: { email: ownerEmail, name: "Terapia Financiera" },
           subject: `Nueva reserva: ${sessionType.name} — ${clientName}`,
-          html: `<h2>Nueva reserva recibida</h2><p><strong>Servicio:</strong> ${sessionType.name}</p><p><strong>Cliente:</strong> ${clientName}</p><p><strong>Email:</strong> ${clientEmail}</p><p><strong>Fecha:</strong> ${dateStr}</p>${meetHtml}${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ""}`,
+          html: `<h2>Nueva reserva recibida</h2><p><strong>Servicio:</strong> ${sessionType.name}</p><p><strong>Cliente:</strong> ${clientName}</p><p><strong>Email:</strong> ${clientEmail}</p><p><strong>Fecha:</strong> ${dateStr}</p>${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ""}`,
         });
       } catch (err) { console.error("SendGrid error:", err); }
 
