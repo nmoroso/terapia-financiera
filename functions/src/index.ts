@@ -152,7 +152,6 @@ export const createBooking = functions.region(REGION)
       let googleEventId: string | undefined;
       try {
         const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
-        console.log("Calendar: inserting event for", clientName);
         const event = await getCalendarClient(creds).events.insert({
           calendarId: process.env.GOOGLE_CALENDAR_ID!,
           requestBody: {
@@ -160,7 +159,6 @@ export const createBooking = functions.region(REGION)
             description: `Cliente: ${clientName}\nEmail: ${clientEmail}${notes ? `\nNotas: ${notes}` : ""}`,
             start: { dateTime: start.toISOString(), timeZone: "America/Santiago" },
             end: { dateTime: end.toISOString(), timeZone: "America/Santiago" },
-            attendees: [{ email: clientEmail }],
           },
         });
         googleEventId = event.data.id ?? undefined;
