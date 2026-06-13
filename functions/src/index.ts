@@ -66,6 +66,24 @@ function getCalendarClient(credentials: object) {
   return google.calendar({ version: "v3", auth });
 }
 
+// Converts a date+time string ("HH:MM") interpreted as America/Santiago into a UTC Date
+function santiagoToUtc(dateStr: string, timeStr: string): Date {
+  const naive = new Date(`${dateStr}T${timeStr}:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Santiago",
+    year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric", second: "numeric",
+    hour12: false,
+  }).formatToParts(naive);
+  const p: Record<string, string> = {};
+  parts.forEach(({ type, value }) => { p[type] = value; });
+  const santiagoNaive = new Date(
+    `${p.year}-${p.month.padStart(2, "0")}-${p.day.padStart(2, "0")}T` +
+    `${p.hour.padStart(2, "0")}:${p.minute.padStart(2, "0")}:${p.second.padStart(2, "0")}Z`
+  );
+  return new Date(naive.getTime() + (naive.getTime() - santiagoNaive.getTime()));
+}
+
 async function getExistingBookings(date: Date): Promise<{ start: Date; end: Date }[]> {
   const startOfDay = new Date(date); startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(date); endOfDay.setHours(23, 59, 59, 999);
@@ -84,12 +102,10 @@ function generateSlots(
   durationMinutes: number, existingBookings: { start: Date; end: Date }[]
 ): string[] {
   const slots: string[] = [];
-  const dateStr = date.toISOString().split("T")[0];
+  const dateStr = date.toLocaleString("en-CA", { timeZone: "America/Santiago" }).split(",")[0].trim();
   for (const window of availability.slots) {
-    const [endH, endM] = window.end.split(":").map(Number);
-    let current = new Date(`${dateStr}T${window.start}:00`);
-    const windowEnd = new Date(`${dateStr}T${window.end}:00`);
-    windowEnd.setHours(endH, endM, 0, 0);
+    let current = santiagoToUtc(dateStr, window.start);
+    const windowEnd = santiagoToUtc(dateStr, window.end);
     while (current.getTime() + durationMinutes * 60000 <= windowEnd.getTime()) {
       const slotEnd = new Date(current.getTime() + durationMinutes * 60000);
       const overlaps = existingBookings.some((b) => current < b.end && slotEnd > b.start);
@@ -118,8 +134,9 @@ export const getAvailableSlots = functions.region(REGION).https.onRequest((req, 
     const sessionTypeDoc = await db.collection("sessionTypes").doc(sessionTypeId).get();
     if (!sessionTypeDoc.exists) throw new Error("Session type not found");
     const sessionType = sessionTypeDoc.data() as SessionType;
-    const targetDate = new Date(date + "T12:00:00");
-    const dayOfWeek = targetDate.getDay().toString();
+    // Use noon Santiago time to reliably get the correct day of week
+    const targetDate = santiagoToUtc(date, "12:00");
+    const dayOfWeek = new Date(targetDate.toLocaleString("en-US", { timeZone: "America/Santiago" })).getDay().toString();
     const configDoc = await db.collection("config").doc("availability").get();
     if (!configDoc.exists) return { slots: [] };
     const availability = configDoc.data() as Record<string, DayAvailability>;
@@ -150,19 +167,29 @@ export const createBooking = functions.region(REGION)
         throw new Error("Slot no longer available");
 
       let googleEventId: string | undefined;
+      let meetLink: string | undefined;
       try {
         const creds = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS!);
+        const requestId = `booking-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const event = await getCalendarClient(creds).events.insert({
           calendarId: process.env.GOOGLE_CALENDAR_ID!,
+          conferenceDataVersion: 1,
           requestBody: {
             summary: `${sessionType.name} — ${clientName}`,
             description: `Cliente: ${clientName}\nEmail: ${clientEmail}${notes ? `\nNotas: ${notes}` : ""}`,
             start: { dateTime: start.toISOString(), timeZone: "America/Santiago" },
             end: { dateTime: end.toISOString(), timeZone: "America/Santiago" },
+            conferenceData: {
+              createRequest: {
+                requestId,
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+              },
+            },
           },
         });
         googleEventId = event.data.id ?? undefined;
-        console.log("Calendar: event created", googleEventId);
+        meetLink = event.data.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ?? undefined;
+        console.log("Calendar: event created", googleEventId, "meet:", meetLink);
       } catch (err) { console.error("Calendar error:", err); }
 
       const bookingRef = await db.collection("bookings").add({
@@ -172,6 +199,7 @@ export const createBooking = functions.region(REGION)
         startTime: admin.firestore.Timestamp.fromDate(start),
         endTime: admin.firestore.Timestamp.fromDate(end),
         status: "confirmed", googleEventId: googleEventId ?? null,
+        meetLink: meetLink ?? null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -182,17 +210,20 @@ export const createBooking = functions.region(REGION)
           timeZone: "America/Santiago", weekday: "long", year: "numeric",
           month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
         });
+        const meetHtml = meetLink
+          ? `<p><strong>Link de la reunión:</strong> <a href="${meetLink}">${meetLink}</a></p>`
+          : "";
         await sgMail.send({
           to: clientEmail,
           from: { email: ownerEmail, name: "Terapia Financiera" },
           subject: `Reserva confirmada: ${sessionType.name}`,
-          html: `<h2>¡Tu sesión está confirmada!</h2><p>Hola <strong>${clientName}</strong>,</p><p>Tu sesión de <strong>${sessionType.name}</strong> ha sido agendada para el <strong>${dateStr}</strong>.</p><p>Duración: ${sessionType.duration} minutos.</p>${notes ? `<p>Notas: ${notes}</p>` : ""}<p>Si necesitas cancelar o reagendar, contáctanos.</p><p><strong>Terapia Financiera</strong></p>`,
+          html: `<h2>¡Tu sesión está confirmada!</h2><p>Hola <strong>${clientName}</strong>,</p><p>Tu sesión de <strong>${sessionType.name}</strong> ha sido agendada para el <strong>${dateStr}</strong>.</p><p>Duración: ${sessionType.duration} minutos.</p>${meetHtml}${notes ? `<p>Notas: ${notes}</p>` : ""}<p>Si necesitas cancelar o reagendar, contáctanos.</p><p><strong>Terapia Financiera</strong></p>`,
         });
         await sgMail.send({
           to: ownerEmail,
           from: { email: ownerEmail, name: "Terapia Financiera" },
           subject: `Nueva reserva: ${sessionType.name} — ${clientName}`,
-          html: `<h2>Nueva reserva recibida</h2><p><strong>Servicio:</strong> ${sessionType.name}</p><p><strong>Cliente:</strong> ${clientName}</p><p><strong>Email:</strong> ${clientEmail}</p><p><strong>Fecha:</strong> ${dateStr}</p>${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ""}`,
+          html: `<h2>Nueva reserva recibida</h2><p><strong>Servicio:</strong> ${sessionType.name}</p><p><strong>Cliente:</strong> ${clientName}</p><p><strong>Email:</strong> ${clientEmail}</p><p><strong>Fecha:</strong> ${dateStr}</p>${meetHtml}${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ""}`,
         });
       } catch (err) { console.error("SendGrid error:", err); }
 
